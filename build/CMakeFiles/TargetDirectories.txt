@@ -1,1 +1,0 @@
-/home/john/dev/pcl-example/pxcgrabber/build/CMakeFiles/pxc_test.dir
