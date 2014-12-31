@@ -13,6 +13,7 @@
 
 //#include <pcl/io/pxc_grabber.h>
 #include "softkinetic_grabber.h"
+#include "softkinetic_image.h"
 
 /*
 #define SHOW_FPS 1
@@ -61,8 +62,8 @@ class PXCGrabFrame
        visualizer_->addCoordinateSystem (1.0, "global");
        visualizer_->initCameraParameters ();
        visualizer_->setPosition (0, 500);
-       visualizer_->setSize (640, 480);
-       visualizer_->setCameraClipDistances (0.01, 10.01);
+       visualizer_->setSize (320, 240);
+       visualizer_->setCameraClipDistances (-0.01, -10.0);
 
        color_viewer_ = pcl::visualization::ImageViewer::Ptr(new pcl::visualization::ImageViewer);
        depth_viewer_ = pcl::visualization::ImageViewer::Ptr(new pcl::visualization::ImageViewer);
@@ -86,23 +87,30 @@ class PXCGrabFrame
      }
 
      void
-     color_cb_ (pcl::LockedRGBImage& color_image)
+     color_cb_ (softkinetic_wrapper::ImageRGB24& color_image)
      {
        if (quit_)
          return;
 
        //boost::mutex::scoped_lock lock (cloud_mutex_);
-       color_image_ = color_image.getData();
+       // TODO
+       int len = color_image.getWidth()*color_image.getHeight()*3;
+       unsigned char* data = new unsigned char[len];
+       color_image_.reset(data);
+       color_image.fillRGB(color_image.getWidth(), color_image.getHeight(), data);
      }
 
      void
-     depth_cb_ (pcl::LockedDepthImage& depth_image)
+     depth_cb_ (softkinetic_wrapper::DepthImage& depth_image)
      {
        if (quit_)
          return;
 
        //boost::mutex::scoped_lock lock (cloud_mutex_);
-       depth_image_ = depth_image.getData();
+       float* data = new float[depth_image.getWidth()*depth_image.getHeight()];
+       depth_image_.reset(data);
+       depth_image.fillDepthImage(depth_image.getWidth(), depth_image.getHeight(), data);
+       //depth_image_ = depth_image.getData();
      }
 
      void camera_cb_(const Eigen::Matrix3f& intrinsics, const Eigen::Matrix4f& extrinsics)
@@ -114,9 +122,9 @@ class PXCGrabFrame
        intrinsics_ = intrinsics;
        extrinsics_ = extrinsics;
 
-       printf("before camera callback\n");
+       //printf("before camera callback\n");
        //visualizer_->setCameraParameters(intrinsics, extrinsics);
-       printf("after camera callback\n");
+       //printf("after camera callback\n");
      }
 
      void
@@ -175,11 +183,43 @@ class PXCGrabFrame
        return (temp_depth);
      }
 
+     void saveCamera(pcl::visualization::Camera& camera)
+     {
+       std::ofstream of("camera.txt");
+       // Eigen::Matrix4d proj;
+       // camera.computeProjectionMatrix (proj);
+
+       // for (int i = 0; i < 4; i++) {
+       //   for (int j = 0; j < 4; j++) {
+       //     of << proj(i, j) << "  ";
+       //   }
+       //   of << std::endl;
+       // }
+
+       of << "focal" << std::endl;
+       of << camera.focal[0] << "  " << camera.focal[1] << "  " << camera.focal[2] << std::endl;
+       of << "pos" << std::endl;
+       of << camera.pos[0] << "  " << camera.pos[1] << "  " << camera.pos[2] << std::endl;
+       of << "viewup" << std::endl;
+       of << camera.view[0] << "  " << camera.view[1] << "  " << camera.view[2] << std::endl;
+       of << "clip" << std::endl;
+       of << camera.clip[0] << "  " << camera.clip[1] << std::endl;
+       of << "fovy" << std::endl;
+       of << camera.fovy << std::endl;
+       of << "window_size" << std::endl;
+       of << camera.window_size[0] << "  " << camera.window_size[1] << std::endl;
+       of << "window_pos" << std::endl;
+       of << camera.window_pos[0] << "  " << camera.window_pos[1] << std::endl;
+
+       of.close();
+     }
      void
      run ()
      {
        // register the keyboard and mouse callback for the visualizer
        visualizer_->registerKeyboardCallback(&PXCGrabFrame::keyboard_callback,*this);
+       color_viewer_->registerKeyboardCallback(&PXCGrabFrame::keyboard_callback,*this);
+       depth_viewer_->registerKeyboardCallback(&PXCGrabFrame::keyboard_callback,*this);
 
        // make callback function from member function
        boost::function<void (const CloudConstPtr&)> f = boost::bind(&PXCGrabFrame::cloud_cb_, this, _1); 
@@ -187,9 +227,9 @@ class PXCGrabFrame
        // connect callback function for desired signal. In this case its a point cloud with color values
        boost::signals2::connection c = grabber_.registerCallback (f);
 
-       boost::function<void (pcl::LockedRGBImage&)> cf = boost::bind(&PXCGrabFrame::color_cb_, this, _1); 
+       boost::function<void (softkinetic_wrapper::ImageRGB24&)> cf = boost::bind(&PXCGrabFrame::color_cb_, this, _1); 
        grabber_.registerCallback (cf);
-       boost::function<void (pcl::LockedDepthImage&)> df = boost::bind(&PXCGrabFrame::depth_cb_, this, _1); 
+       boost::function<void (softkinetic_wrapper::DepthImage&)> df = boost::bind(&PXCGrabFrame::depth_cb_, this, _1); 
        grabber_.registerCallback (df);
        boost::function<void (const Eigen::Matrix3f&, const Eigen::Matrix4f&)> pf = boost::bind(&PXCGrabFrame::camera_cb_, this, _1, _2); 
        grabber_.registerCallback (pf);
@@ -215,17 +255,17 @@ class PXCGrabFrame
             depth_viewer_->showFloatImage(reinterpret_cast<float*> (&depth_image[0]), 320, 240);
          }
 
-         visualizer_->spinOnce ();
+         //visualizer_->spinOnce ();
 
          if (cloud_)
          {
            CloudConstPtr cloud = getLatestCloud ();
            if (!cloud)
            {
-              printf("Cloud is null\n");
+              //printf("Cloud is null\n");
            }
 
-           printf("grabbed an cloud\n");
+           //printf("grabbed an cloud\n");
            CloudPtr filtered_cloud (new Cloud ());
            filtered_cloud->reserve (cloud->size ());
            for (int point_id = 0; point_id < cloud->size (); ++point_id)
@@ -244,15 +284,26 @@ class PXCGrabFrame
            	 //visualizer_->removeAllPointClouds ();
              visualizer_->addPointCloud (filtered_cloud, "PXCCloud");
              //visualizer_->resetCameraViewpoint ("PXCCloud");
-             printf("set camera parameters ");
-             printf("%g, %g\n", intrinsics_(0,0), intrinsics_(0,1));
              visualizer_->setCameraParameters(intrinsics_, extrinsics_);
-         //boost::this_thread::sleep (boost::posix_time::microseconds (1000000));
+             visualizer_->setCameraClipDistances (-0.01, -10);
+             //visualizer_->setCameraFieldOfView (1.125); //(0.8575);
+             pcl::visualization::Camera camera;
+             visualizer_->getCameraParameters(camera);
+             saveCamera(camera);
+             //printf("set camera parameters ");
+             //printf("%g, %g\n", intrinsics_(0,0), intrinsics_(0,1));
+             //boost::this_thread::sleep (boost::posix_time::microseconds (1000000));
              //visualizer_->spinOnce();
              //visualizer_->updateCamera();
              //visualizer_->setCameraPosition(0, 0, 0, 0, 0, 5, 0, 1, 0);
 
            }
+           visualizer_->setCameraParameters (intrinsics_, extrinsics_);
+           visualizer_->setCameraClipDistances (-0.01, -10.0);
+           //visualizer_->setCameraFieldOfView (0.8575);
+           visualizer_->spinOnce ();
+
+           //visualizer_->setCameraParameters(intrinsics_, extrinsics_);
           
            if (save_)
            {

@@ -7,5 +7,5 @@ set(SK_INCLUDE_DIR "/opt/softkinetic/DepthSenseSDK/include" CACHE PATH "path of 
 include_directories(${PCL_INCLUDE_DIRS} ${SK_INCLUDE_DIR})
 link_directories(${PCL_LIBRARY_DIRS} /opt/softkinetic/DepthSenseSDK/lib)
 add_definitions(${PCL_DEFINITIONS})
-add_executable(pxc_test pxc_viewer.cpp softkinetic_grabber.cpp)
+add_executable(pxc_test pxc_viewer.cpp softkinetic_grabber.cpp softkinetic_image.cpp)
 target_link_libraries(pxc_test  ${PCL_LIBRARIES} DepthSense)

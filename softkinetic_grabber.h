@@ -49,6 +49,7 @@
 #include <pcl/point_cloud.h>
 
 #include <boost/thread.hpp>  
+#include "softkinetic_image.h"
 
 //#include "pxcsmartptr.h"
 //#include "pxcsession.h"
@@ -64,7 +65,6 @@
 #include <deque>
 #include <DepthSense.hxx>
 
-
 namespace pcl
 {
   struct PointXYZ;
@@ -72,70 +72,6 @@ namespace pcl
   struct PointXYZRGBA;
   struct PointXYZI;
   template <typename T> class PointCloud;
-
-
-  template <typename T, bool rgb=false>
-  struct LockedImage
-  {
-    LockedImage(int c, int r) : width_(c), height_(r)
-    {
-      length_ = rgb ? c*r*3 : c*r;
-    }
-    
-    LockedImage()
-    {
-      width_ = 0;
-      height_ = 0;
-      length_ = 0;
-    }
-
-    void setDimension(int c, int r)
-    {
-      width_ = c;
-      height_ = r;
-      int newlength = rgb ? c*r*3 : c*r;
-      if (length_ != newlength)
-      {
-        length_ = newlength;
-        image_array_.reset();
-      }
-    }
-
-    void setData(T* data)
-    {
-      boost::mutex::scoped_lock lock(data_access_mutex_);
-      if (!image_array_)
-      {
-        image_array_.reset(new T[length_]);
-      }
-      T* buffer = image_array_.get();
-      memcpy(buffer, data, length_*sizeof(T));
-    }
-
-    bool hasData()
-    {
-      boost::mutex::scoped_lock lock(data_access_mutex_);
-      return image_array_;      
-    }
-
-    boost::shared_array<T> getData()
-    {
-       boost::mutex::scoped_lock lock(data_access_mutex_);
-       boost::shared_array<T> temp_array;
-       temp_array.swap (image_array_); //here we set image_array_ to null
-
-       return temp_array;
-    }
-
-    int width_;
-    int height_;
-    int length_;
-    mutable boost::mutex data_access_mutex_;
-    boost::shared_array<T> image_array_;
-  };
-
-  typedef LockedImage<unsigned char, true> LockedRGBImage;
-  typedef LockedImage<float, false> LockedDepthImage;
 
 
   /** \brief Grabber for SK devices
@@ -160,8 +96,8 @@ namespace pcl
       typedef void (sig_cb_sk_point_cloud_rgb) (const boost::shared_ptr<const pcl::PointCloud<pcl::PointXYZRGB> >&);
       typedef void (sig_cb_sk_point_cloud_rgba) (const boost::shared_ptr<const pcl::PointCloud<pcl::PointXYZRGBA> >&);
       typedef void (sig_cb_sk_point_cloud_i) (const boost::shared_ptr<const pcl::PointCloud<pcl::PointXYZI> >&);
-      typedef void (sig_cb_sk_color_image) (LockedRGBImage &);
-      typedef void (sig_cb_sk_depth_image) (LockedDepthImage &);
+      typedef void (sig_cb_sk_color_image) (softkinetic_wrapper::ImageRGB24 &);
+      typedef void (sig_cb_sk_depth_image) (softkinetic_wrapper::DepthImage &);
       typedef void (sig_cb_sk_camera_pose) (const Eigen::Matrix3f &, const Eigen::Matrix4f &);
       //typedef void (sig_cb_sk_depth_image) (const boost::shared_array<float> &);
 
@@ -269,15 +205,15 @@ namespace pcl
 
       mutable unsigned int rgb_array_size_;
       mutable unsigned int depth_buffer_size_;
-      mutable boost::shared_array<unsigned char> rgb_array_;
-      mutable boost::shared_array<float> depth_buffer_;
+      //mutable boost::shared_array<unsigned char> rgb_array_;
+      //mutable boost::shared_array<float> depth_buffer_;
 
       // thread where the grabbing takes place
       boost::thread grabber_thread_;
       boost::thread skrun_thread_;
 
-      LockedRGBImage lockedRGBImage_;
-      LockedDepthImage lockedDepthImage_;
+      boost::shared_ptr<softkinetic_wrapper::ImageRGB24> rgbImage_;
+      boost::shared_ptr<softkinetic_wrapper::DepthImage> depthImage_;
 
       pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_;
 

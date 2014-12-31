@@ -135,13 +135,15 @@ void pcl::SKGrabber::onNewColorSample(ColorNode node, ColorNode::NewSampleReceiv
   if (rgb_array_size_ < image_width_ * image_height_ * 3)
   {
     rgb_array_size_ = image_width_ * image_height_ * 3;
-    rgb_array_.reset (new unsigned char [rgb_array_size_]);
-    lockedRGBImage_.setDimension(w,h);
+    //rgb_array_.reset (new unsigned char [rgb_array_size_]);
+    //lockedRGBImage_.setDimension(w,h);
+    printf("new color image size %d x %d\n", image_width_, image_height_);
   }
 
-  unsigned char* buffer = rgb_array_.get();
+  //unsigned char* buffer = rgb_array_.get();
   unsigned char* colorMap = reinterpret_cast<unsigned char *>(const_cast<unsigned char*>(static_cast<const unsigned char  *>(data.colorMap)));
-  std::memcpy(buffer, colorMap, image_width_ * image_height_ * 3);
+  rgbImage_.reset(new ::softkinetic_wrapper::ImageRGB24(w, h, colorMap));
+  //std::memcpy(buffer, colorMap, image_width_ * image_height_ * 3);
   //std::string filename = "color.png";
   //pcl::io::saveRgbPNGFile (filename, (unsigned char*)buffer, image_width_, image_height_);
 
@@ -177,6 +179,9 @@ void pcl::SKGrabber::onNewDepthSample(DepthNode node, DepthNode::NewSampleReceiv
     return;
   }
 
+  if (!g_pProjHelper)
+    g_pProjHelper = new ProjectionHelper(data.stereoCameraParameters);
+
   {
     boost::mutex::scoped_lock lock(data_ready_mutex_);
 
@@ -184,13 +189,14 @@ void pcl::SKGrabber::onNewDepthSample(DepthNode node, DepthNode::NewSampleReceiv
     //  proj_helper_ = new ProjectionHelper(data.stereoCameraParameters);
 
     //print camera info
-    printf("extrinsic param\n");
-    printf(" %g, %g, %g, %g, \n %g, %g, %g, %g\n %g, %g, %g, %g\n", 
-      data.stereoCameraParameters.extrinsics.r11, data.stereoCameraParameters.extrinsics.r12,  data.stereoCameraParameters.extrinsics.r13, data.stereoCameraParameters.extrinsics.t1, 
-      data.stereoCameraParameters.extrinsics.r21, data.stereoCameraParameters.extrinsics.r22,  data.stereoCameraParameters.extrinsics.r23, data.stereoCameraParameters.extrinsics.t2,
-      data.stereoCameraParameters.extrinsics.r31, data.stereoCameraParameters.extrinsics.r32,  data.stereoCameraParameters.extrinsics.r33,
-      data.stereoCameraParameters.extrinsics.t3);
-
+    if (g_dFrames < 1) {
+      printf("extrinsic depth param\n");
+      printf(" %g, %g, %g, %g, \n %g, %g, %g, %g\n %g, %g, %g, %g\n", 
+        data.stereoCameraParameters.extrinsics.r11, data.stereoCameraParameters.extrinsics.r12,  data.stereoCameraParameters.extrinsics.r13, data.stereoCameraParameters.extrinsics.t1, 
+        data.stereoCameraParameters.extrinsics.r21, data.stereoCameraParameters.extrinsics.r22,  data.stereoCameraParameters.extrinsics.r23, data.stereoCameraParameters.extrinsics.t2,
+        data.stereoCameraParameters.extrinsics.r31, data.stereoCameraParameters.extrinsics.r32,  data.stereoCameraParameters.extrinsics.r33,
+        data.stereoCameraParameters.extrinsics.t3);
+    }
 
     //Eigen::Matrix3f R;// = Eigen::Matrix3f::Identity ();   // * AngleAxisf( pcl::deg2rad(-30.f), Vector3f::UnitX());
     extrinsics_ << data.stereoCameraParameters.extrinsics.r11, data.stereoCameraParameters.extrinsics.r12,  data.stereoCameraParameters.extrinsics.r13, data.stereoCameraParameters.extrinsics.t1,
@@ -198,16 +204,20 @@ void pcl::SKGrabber::onNewDepthSample(DepthNode node, DepthNode::NewSampleReceiv
       data.stereoCameraParameters.extrinsics.r31, data.stereoCameraParameters.extrinsics.r32,  data.stereoCameraParameters.extrinsics.r33, data.stereoCameraParameters.extrinsics.t3,
       0.0f, 0.0f, 0.0f, 1.0f;
     //extrinsics_.transposeInPlace();
-    printf("end of extrinsics\n");
-    printf("%g, %g, %g,\n%g, %g, %g\n", data.stereoCameraParameters.depthIntrinsics.fx, 0.0f, data.stereoCameraParameters.depthIntrinsics.cx, 
-      0.0f, data.stereoCameraParameters.depthIntrinsics.fy, data.stereoCameraParameters.depthIntrinsics.cy);
     //Eigen::Vector3f t;
     //t << data.stereoCameraParameters.extrinsics.t1, data.stereoCameraParameters.extrinsics.t2,  data.stereoCameraParameters.extrinsics.t3;
-    intrinsics_ << data.stereoCameraParameters.depthIntrinsics.fx, 0.0f, data.stereoCameraParameters.depthIntrinsics.cx, 
-      0.0f, data.stereoCameraParameters.depthIntrinsics.fy, data.stereoCameraParameters.depthIntrinsics.cy,
+    intrinsics_ << data.stereoCameraParameters.depthIntrinsics.fx, 0.0f, data.stereoCameraParameters.depthIntrinsics.cx * 2, 
+      0.0f, data.stereoCameraParameters.depthIntrinsics.fy, data.stereoCameraParameters.depthIntrinsics.cy * 2,
       0.0f, 0.0f, 1.0f;
     //intrinsics_.transposeInPlace();
-    printf("end of intrinsics\n");
+    if (g_dFrames < 1) {
+      printf("%g, %g, %g,\n%g, %g, %g\n", data.stereoCameraParameters.depthIntrinsics.fx, 0.0f, data.stereoCameraParameters.depthIntrinsics.cx, 
+        0.0f, data.stereoCameraParameters.depthIntrinsics.fy, data.stereoCameraParameters.depthIntrinsics.cy);
+      printf("%g, %g, %g,\n%g, %g, %g\n", data.stereoCameraParameters.colorIntrinsics.fx, 0.0f, data.stereoCameraParameters.colorIntrinsics.cx, 
+        0.0f, data.stereoCameraParameters.colorIntrinsics.fy, data.stereoCameraParameters.colorIntrinsics.cy);
+
+      printf("end of intrinsics\n");
+    }
 
     //Eigen::Vector3f t = volume_size * 0.5f - Vector3f (0, 0, volume_size (2) / 2 * 1.2f);
     //Eigen::Affine3f pose = Eigen::Translation3f (t) * Eigen::AngleAxisf (R);
@@ -223,25 +233,27 @@ void pcl::SKGrabber::onNewDepthSample(DepthNode node, DepthNode::NewSampleReceiv
     if (depth_buffer_size_ < w * h)
     {
       depth_buffer_size_ = w * h;
-      depth_buffer_.reset (new float [depth_buffer_size_]);
+      //depth_buffer_.reset (new float [depth_buffer_size_]);
       //printf("reset depth buffer\n");
-      lockedDepthImage_.setDimension(w, h);
+      //lockedDepthImage_.setDimension(w, h);
     }
-
-    std::memcpy(depth_buffer_.get(), data.depthMapFloatingPoint, depth_buffer_size_*sizeof(float));
+    depthImage_.reset(new softkinetic_wrapper::DepthImage(w, h, data.depthMapFloatingPoint ));
+    //std::memcpy(depth_buffer_.get(), data.depthMapFloatingPoint, depth_buffer_size_*sizeof(float));
 
     //printf("depth copy data\n");
 
     cloud_ = pcl::PointCloud<pcl::PointXYZRGBA>::Ptr(new pcl::PointCloud<pcl::PointXYZRGBA> (w, h));
-    cloud_->is_dense = false;
+    //cloud_->is_dense = false;
     if (cloud_->points.size() != w*h)
       cloud_->points.resize(w * h);
 
     //printf("cloud reset\n");
-    unsigned char* rgb_image_data = rgb_array_.get();
-    float* depth_image_data = depth_buffer_.get();
+    unsigned char* rgb_image_data = rgbImage_.get()->getRGB(); //rgb_array_.get();
+    float* depth_image_data = depthImage_.get()->getDepthMap(); //depth_buffer_.get();
     Vertex p3DPoints[1];
     Point2D p2DPoints[1];
+
+    //printf("new color image size %d x %d (%d)\n", image_width_, image_height_, rgb_array_.get());
 
     const float nan_value = std::numeric_limits<float>::quiet_NaN ();
 
@@ -249,14 +261,14 @@ void pcl::SKGrabber::onNewDepthSample(DepthNode node, DepthNode::NewSampleReceiv
     {
       for (int i = 0; i < w; i++, k++)
       {
-        cloud_->points[k].x = -data.verticesFloatingPoint[k].x;
-        cloud_->points[k].y = data.verticesFloatingPoint[k].y;
-        if (data.verticesFloatingPoint[k].z == 32001)
+        if (data.verticesFloatingPoint[k].z < 0) // saturated
         {
-          cloud_->points[k].z = 0;
+          cloud_->points[k].x = cloud_->points[k].y = cloud_->points[k].z = nan_value;
         }
         else
         {
+          cloud_->points[k].x = data.verticesFloatingPoint[k].x;
+          cloud_->points[k].y = -data.verticesFloatingPoint[k].y;
           cloud_->points[k].z = data.verticesFloatingPoint[k].z;
         }
         // Saturated pixels on depthMapFloatingPoint have -1 value, but on openni are NaN
@@ -266,29 +278,31 @@ void pcl::SKGrabber::onNewDepthSample(DepthNode node, DepthNode::NewSampleReceiv
         }
 
 
-        // unsigned char r = 255;
-        // unsigned char g = 255;
-        // unsigned char b = 255;
+        unsigned char r = 255;
+        unsigned char g = 255;
+        unsigned char b = 255;
 
-        // p3DPoints[0] = data.vertices[k];
-        // g_pProjHelper->get2DCoordinates(p3DPoints, p2DPoints, 2, CAMERA_PLANE_COLOR);
-        // int x_pos = (int)p2DPoints[0].x;
-        // int y_pos = (int)p2DPoints[0].y;
-        // if (y_pos >= 0 && y_pos <= image_height_ && x_pos >= 0 && x_pos <= image_width_)
-        // {
-        //   // Within bounds: depth fov is significantly wider than color's
-        //   // one, so there are black points in the borders of the pointcloud
-        //   unsigned char* rgb_ptr = rgb_image_data + 3 * (y_pos*image_width_+x_pos);
-        //   cloud_->points[k].b = rgb_ptr[0];
-        //   cloud_->points[k].g = rgb_ptr[1];
-        //   cloud_->points[k].r = rgb_ptr[2];
-        // }
-        // else
-        // {
-        //   cloud_->points[k].b = nan_value;
-        //   cloud_->points[k].g = nan_value;
-        //   cloud_->points[k].r = nan_value;          
-        // }
+        p3DPoints[0] = data.vertices[k];
+        g_pProjHelper->get2DCoordinates(p3DPoints, p2DPoints, 2, CAMERA_PLANE_COLOR);
+        int x_pos = (int)p2DPoints[0].x;
+        int y_pos = (int)p2DPoints[0].y;
+        //printf("%d x %d\n", x_pos, y_pos);
+        if (y_pos >= 0 && y_pos < image_height_ && x_pos >= 0 && x_pos < image_width_)
+        {
+          // Within bounds: depth fov is significantly wider than color's
+          // one, so there are black points in the borders of the pointcloud
+          //unsigned char* rgb_ptr = rgb_image_data + 3 * (y_pos*image_width_+x_pos);
+          int idx = 3 * (y_pos*image_width_+x_pos);
+          cloud_->points[k].b = rgb_image_data[idx+0];
+          cloud_->points[k].g = rgb_image_data[idx+1];
+          cloud_->points[k].r = rgb_image_data[idx+2];
+        }
+        else
+        {
+          cloud_->points[k].b = nan_value;
+          cloud_->points[k].g = nan_value;
+          cloud_->points[k].r = nan_value;          
+        }
       }
     }
 
@@ -547,7 +561,11 @@ void pcl::SKGrabber::deviceDisconnectedCallback(Context context, Context::Device
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void pcl::SKGrabber::skrun()
 {
-  g_context.run();
+  try {
+    g_context.run();
+  } catch (...) {
+    //printf ("not running\n");
+  }
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -598,14 +616,24 @@ void
 pcl::SKGrabber::close ()
 {
   //pp_.Close ();
+  try {
+    g_context.quit();
+  } catch (...) {
+    //printf ("quit the loop\n");
+  }
+  skrun_thread_.join();
+
   g_context.stopNodes();
 
-  if (g_cnode.isSet()) g_context.unregisterNode(g_cnode);
-  if (g_dnode.isSet()) g_context.unregisterNode(g_dnode);
-  if (g_anode.isSet()) g_context.unregisterNode(g_anode);
+  if (g_cnode.isSet()) { g_context.unregisterNode(g_cnode); g_cnode.unset(); }
+  if (g_dnode.isSet()) { g_context.unregisterNode(g_dnode); g_dnode.unset(); }
 
-  if (g_pProjHelper)
+  //if (g_anode.isSet()) g_context.unregisterNode(g_anode);
+
+  if (g_pProjHelper) {
     delete g_pProjHelper;
+    g_pProjHelper = NULL;
+  }
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -671,7 +699,7 @@ pcl::SKGrabber::processGrabbing ()
   {
     // boost::mutex::scoped_lock lock(data_ready_mutex_);
     // has data that haven't been fetched
-    printf(".");
+    //printf(".");
     if (has_depth_data_ == false || has_color_data_ == false) {
       boost::this_thread::sleep (boost::posix_time::milliseconds (10));
       continue;
@@ -690,16 +718,16 @@ pcl::SKGrabber::processGrabbing ()
         pose_signal_->operator() (intrinsics_, extrinsics_);
       }
 
-      if (num_slots<sig_cb_sk_color_image> () > 0 && !lockedRGBImage_.hasData())
+      if (num_slots<sig_cb_sk_color_image> () > 0)
       {
-        lockedRGBImage_.setData(rgb_array_.get());
-        color_image_signal_->operator() (lockedRGBImage_);
+        //lockedRGBImage_.setData(rgb_array_.get());
+        color_image_signal_->operator() (*(rgbImage_.get()));
       }
 
-      if (num_slots<sig_cb_sk_depth_image> () > 0 && !lockedDepthImage_.hasData())
+      if (num_slots<sig_cb_sk_depth_image> () > 0)
       {
-        lockedDepthImage_.setData(depth_buffer_.get());
-        depth_image_signal_->operator() (lockedDepthImage_);
+        //lockedDepthImage_.setData(depth_buffer_.get());
+        depth_image_signal_->operator() (*(depthImage_.get()));
       }
 
       if (num_slots<sig_cb_sk_point_cloud_rgba> () > 0)
@@ -756,7 +784,7 @@ pcl::SKGrabber::processGrabbing ()
       fps_mutex_.unlock ();
 
     }
-    printf("end grabbing\n");
+    //printf("end grabbing\n");
   }
 }
 
