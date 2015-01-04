@@ -77,7 +77,7 @@ class PXCGrabFrame
      }
 
      void
-     cloud_cb_ (const CloudConstPtr& cloud)
+     cloud_cb_ (CloudConstPtr cloud)
      {
        if (quit_)
          return;
@@ -87,40 +87,37 @@ class PXCGrabFrame
      }
 
      void
-     color_cb_ (softkinetic_wrapper::ImageRGB24& color_image)
+     color_cb_ (boost::shared_ptr<softkinetic_wrapper::Image>& color_image)
      {
        if (quit_)
          return;
 
-       //boost::mutex::scoped_lock lock (cloud_mutex_);
-       // TODO
-       int len = color_image.getWidth()*color_image.getHeight()*3;
+       int len = color_image.get()->getWidth()*color_image.get()->getHeight()*3;
        unsigned char* data = new unsigned char[len];
        color_image_.reset(data);
-       color_image.fillRGB(color_image.getWidth(), color_image.getHeight(), data);
+       color_image.get()->fillRGB(color_image.get()->getWidth(), color_image.get()->getHeight(), data);
      }
 
      void
-     depth_cb_ (softkinetic_wrapper::DepthImage& depth_image)
+     depth_cb_ (boost::shared_ptr<softkinetic_wrapper::DepthImage>& depth_image)
      {
        if (quit_)
          return;
 
-       //boost::mutex::scoped_lock lock (cloud_mutex_);
-       float* data = new float[depth_image.getWidth()*depth_image.getHeight()];
+       float* data = new float[depth_image.get()->getWidth()*depth_image.get()->getHeight()];
        depth_image_.reset(data);
-       depth_image.fillDepthImage(depth_image.getWidth(), depth_image.getHeight(), data);
-       //depth_image_ = depth_image.getData();
+       depth_image.get()->fillDepthImage(depth_image.get()->getWidth(), depth_image.get()->getHeight(), data);
+       // //depth_image_ = depth_image.getData();
      }
 
-     void camera_cb_(const Eigen::Matrix3f& intrinsics, const Eigen::Matrix4f& extrinsics)
+     void camera_cb_(const std::pair<Eigen::Matrix3f, Eigen::Matrix4f>& camera_params)
      {
         if (quit_)
           return;
 
        boost::mutex::scoped_lock lock (cloud_mutex_);
-       intrinsics_ = intrinsics;
-       extrinsics_ = extrinsics;
+       intrinsics_ = camera_params.first();
+       extrinsics_ = camera_params.second();
 
        //printf("before camera callback\n");
        //visualizer_->setCameraParameters(intrinsics, extrinsics);
@@ -222,17 +219,17 @@ class PXCGrabFrame
        depth_viewer_->registerKeyboardCallback(&PXCGrabFrame::keyboard_callback,*this);
 
        // make callback function from member function
-       boost::function<void (const CloudConstPtr&)> f = boost::bind(&PXCGrabFrame::cloud_cb_, this, _1); 
+       boost::function<void (CloudConstPtr)> f = boost::bind(&PXCGrabFrame::cloud_cb_, this, _1); 
 
        // connect callback function for desired signal. In this case its a point cloud with color values
        boost::signals2::connection c = grabber_.registerCallback (f);
 
-       boost::function<void (softkinetic_wrapper::ImageRGB24&)> cf = boost::bind(&PXCGrabFrame::color_cb_, this, _1); 
+       boost::function<void (boost::shared_ptr<softkinetic_wrapper::Image>&)> cf = boost::bind(&PXCGrabFrame::color_cb_, this, _1); 
        grabber_.registerCallback (cf);
-       boost::function<void (softkinetic_wrapper::DepthImage&)> df = boost::bind(&PXCGrabFrame::depth_cb_, this, _1); 
+       boost::function<void (boost::shared_ptr<softkinetic_wrapper::DepthImage>&)> df = boost::bind(&PXCGrabFrame::depth_cb_, this, _1); 
        grabber_.registerCallback (df);
-       boost::function<void (const Eigen::Matrix3f&, const Eigen::Matrix4f&)> pf = boost::bind(&PXCGrabFrame::camera_cb_, this, _1, _2); 
-       grabber_.registerCallback (pf);
+       //boost::function<void (const std::pair<Eigen::Matrix3f, Eigen::Matrix4f> &)> pf = boost::bind(&PXCGrabFrame::camera_cb_, this, _1); 
+       //grabber_.registerCallback (pf);
 
        // start receiving point clouds
        printf("before run::start\n");
@@ -284,12 +281,14 @@ class PXCGrabFrame
            	 //visualizer_->removeAllPointClouds ();
              visualizer_->addPointCloud (filtered_cloud, "PXCCloud");
              //visualizer_->resetCameraViewpoint ("PXCCloud");
+             intrinsics_ = grabber_.getIntrinsicParameters();
+             extrinsics_ = grabber_.getExtrinsicParameters();
              visualizer_->setCameraParameters(intrinsics_, extrinsics_);
              visualizer_->setCameraClipDistances (-0.01, -10);
              //visualizer_->setCameraFieldOfView (1.125); //(0.8575);
-             pcl::visualization::Camera camera;
-             visualizer_->getCameraParameters(camera);
-             saveCamera(camera);
+             //pcl::visualization::Camera camera;
+             //visualizer_->getCameraParameters(camera);
+             //saveCamera(camera);
              //printf("set camera parameters ");
              //printf("%g, %g\n", intrinsics_(0,0), intrinsics_(0,1));
              //boost::this_thread::sleep (boost::posix_time::microseconds (1000000));
@@ -382,8 +381,9 @@ main (int argc, char** argv)
    }
    else
    {
-     PXCGrabFrame<pcl::PointXYZRGBA> grab_frame (grabber);
-     grab_frame.run ();
+     //PXCGrabFrame<pcl::PointXYZRGBA> grab_frame (grabber);
+     //grab_frame.run ();
+     return (0);
    }
    return (0);
 } 

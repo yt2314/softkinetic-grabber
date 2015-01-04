@@ -37,6 +37,7 @@ namespace softkinetic_wrapper
 
     virtual void fillRGB (unsigned width, unsigned height, unsigned char* rgb_buffer,
                       unsigned rgb_line_step = 0) const = 0;
+    virtual unsigned char* getRGB() const = 0;
     virtual unsigned getWidth () const = 0;
     virtual unsigned getHeight () const = 0;
   };
@@ -50,7 +51,7 @@ namespace softkinetic_wrapper
 
       virtual unsigned getWidth() const { return width_; }
       virtual unsigned getHeight() const { return height_; }
-      unsigned char* getRGB() { return raw_.get(); }
+      unsigned char* getRGB() const { return raw_.get(); }
 
     private:
       boost::shared_array<unsigned char> raw_;

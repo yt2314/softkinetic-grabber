@@ -46,10 +46,10 @@
 #include <pcl/io/boost.h>
 #include <pcl/io/grabber.h>
 #include <pcl/common/synchronizer.h>
-#include <pcl/point_cloud.h>
 
 #include <boost/thread.hpp>  
 #include "softkinetic_image.h"
+#include "softkinetic_device.h"
 
 //#include "pxcsmartptr.h"
 //#include "pxcsession.h"
@@ -92,16 +92,17 @@ namespace pcl
       //typedef pcl::gpu::PixelRGB  PixelRGB;
 
       //define callback signature typedefs
-      typedef void (sig_cb_sk_point_cloud) (const boost::shared_ptr<const pcl::PointCloud<pcl::PointXYZ> >&);
-      typedef void (sig_cb_sk_point_cloud_rgb) (const boost::shared_ptr<const pcl::PointCloud<pcl::PointXYZRGB> >&);
-      typedef void (sig_cb_sk_point_cloud_rgba) (const boost::shared_ptr<const pcl::PointCloud<pcl::PointXYZRGBA> >&);
-      typedef void (sig_cb_sk_point_cloud_i) (const boost::shared_ptr<const pcl::PointCloud<pcl::PointXYZI> >&);
-      typedef void (sig_cb_sk_color_image) (softkinetic_wrapper::ImageRGB24 &);
-      typedef void (sig_cb_sk_depth_image) (softkinetic_wrapper::DepthImage &);
-      typedef void (sig_cb_sk_camera_pose) (const Eigen::Matrix3f &, const Eigen::Matrix4f &);
+      typedef void (sig_cb_sk_point_cloud) (pcl::PointCloud<pcl::PointXYZ>::ConstPtr);
+      //typedef void (sig_cb_sk_point_cloud_rgb) (pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &);
+      typedef void (sig_cb_sk_point_cloud_rgba) (pcl::PointCloud<pcl::PointXYZRGBA>::ConstPtr );
+      //typedef void (sig_cb_sk_point_cloud_i) (pcl::PointCloud<pcl::PointXYZI>::ConstPtr &);
+      typedef void (sig_cb_sk_color_image) (boost::shared_ptr<softkinetic_wrapper::Image> &);
+      typedef void (sig_cb_sk_depth_image) (boost::shared_ptr<softkinetic_wrapper::DepthImage> &);
+      //typedef void (sig_cb_sk_camera_pose) (const std::pair<Eigen::Matrix3f, Eigen::Matrix4f> &);
       //typedef void (sig_cb_sk_depth_image) (const boost::shared_array<float> &);
 
     public:
+      SKGrabber ();
 
       /** \brief virtual Destructor inherited from the Grabber interface. It never throws. */
       virtual ~SKGrabber () throw ();
@@ -126,102 +127,50 @@ namespace pcl
       virtual float 
       getFramesPerSecond () const;
 
-      virtual void 
-      onNewColorSample(DepthSense::ColorNode node, DepthSense::ColorNode::NewSampleReceivedData data);
-
-      virtual void 
-      onNewDepthSample(DepthSense::DepthNode node, DepthSense::DepthNode::NewSampleReceivedData data);
-
       static SKGrabber& getInstance() {
         static SKGrabber instance;
         return instance;
       }
 
-      static void nodeConnectedCallback(DepthSense::Device device, DepthSense::Device::NodeAddedData data);
-      static void nodeDisconnectedCallback(DepthSense::Device device, DepthSense::Device::NodeRemovedData data);
-      static void deviceConnectedCallback(DepthSense::Context context, DepthSense::Context::DeviceAddedData data);
-      static void deviceDisconnectedCallback(DepthSense::Context context, DepthSense::Context::DeviceRemovedData data);
-      static void newColorSampleCallback(DepthSense::ColorNode node, DepthSense::ColorNode::NewSampleReceivedData data);
-      static void newDepthSampleCallback(DepthSense::DepthNode node, DepthSense::DepthNode::NewSampleReceivedData data);
+      /** \brief RGB image callback. */
+      virtual void
+      imageCallback (boost::shared_ptr<softkinetic_wrapper::Image> image, void* cookie);
 
+      /** \brief Depth image callback. */
+      virtual void
+      depthCallback (boost::shared_ptr<softkinetic_wrapper::DepthImage> depth_image, void* cookie);
+
+      Eigen::Matrix3f getIntrinsicParameters() const { return SoftKineticDevice::getInstance().getIntrinsicParameters(); }
+      Eigen::Matrix4f getExtrinsicParameters() const { return SoftKineticDevice::getInstance().getExtrinsicParameters(); }
+
+      void cloudCallback (pcl::PointCloud<pcl::PointXYZ>::ConstPtr cloud, void*);
+      void cloudRGBACallback (pcl::PointCloud<pcl::PointXYZRGBA>::ConstPtr cloud, void*);
     protected:
 
-      /** \brief Initializes the PXC grabber and the grabbing pipeline. */
-      bool
-      init ();
-
-      /** \brief Closes the grabbing pipeline. */
-      void
-      close ();
-
       /** \brief Continously asks for data from the device and publishes it if available. */
-      void
-      processGrabbing ();
-
-      void skrun();
-
-
-      void configureColorNode();
-      void configureDepthNode();
-      void configureNode(DepthSense::Node);
-
-      void onNodeConnected(DepthSense::Device device, DepthSense::Device::NodeAddedData data);
-      void onNodeDisconnected(DepthSense::Device device, DepthSense::Device::NodeRemovedData data);
-      void onDeviceConnected(DepthSense::Context context, DepthSense::Context::DeviceAddedData data);
-      void onDeviceDisconnected(DepthSense::Context context, DepthSense::Context::DeviceRemovedData data);
 
       // signals to indicate whether new clouds are available
       boost::signals2::signal<sig_cb_sk_point_cloud>* point_cloud_signal_;
       //boost::signals2::signal<sig_cb_fotonic_point_cloud_i>* point_cloud_i_signal_;
-      boost::signals2::signal<sig_cb_sk_point_cloud_rgb>* point_cloud_rgb_signal_;
+      //boost::signals2::signal<sig_cb_sk_point_cloud_rgb>* point_cloud_rgb_signal_;
       boost::signals2::signal<sig_cb_sk_point_cloud_rgba>* point_cloud_rgba_signal_;
 
       boost::signals2::signal<sig_cb_sk_color_image>* color_image_signal_;
       boost::signals2::signal<sig_cb_sk_depth_image>* depth_image_signal_;
-      boost::signals2::signal<sig_cb_sk_camera_pose>* pose_signal_;
+      //boost::signals2::signal<sig_cb_sk_camera_pose>* pose_signal_;
 
     protected:
       /** \brief Constructor */
-      SKGrabber ();
       SKGrabber (SKGrabber const &);
       SKGrabber& operator= (SKGrabber const &);
 
-      // utiliy object for accessing PXC camera
-      //UtilPipeline pp_;
-      // indicates whether grabbing is running
-      int image_width_, image_height_;
-      int depth_width_, depth_height_;
+
+      pcl::SoftKineticDevice::CallbackHandle depth_callback_handle_;
+      pcl::SoftKineticDevice::CallbackHandle image_callback_handle_;
+      pcl::SoftKineticDevice::CallbackHandle cloud_callback_handle_;
+      pcl::SoftKineticDevice::CallbackHandle cloud_rgba_callback_handle_;
+
       mutable bool running_;
-
-      // TODO condition variable may be better for synchronizing
-      mutable bool has_depth_data_;
-      mutable bool has_color_data_;
-      mutable boost::mutex data_ready_mutex_;
-
-
-      // FPS computation
-      mutable float fps_;
-      mutable boost::mutex fps_mutex_;
-
-      mutable unsigned int rgb_array_size_;
-      mutable unsigned int depth_buffer_size_;
-      //mutable boost::shared_array<unsigned char> rgb_array_;
-      //mutable boost::shared_array<float> depth_buffer_;
-
-      // thread where the grabbing takes place
-      boost::thread grabber_thread_;
-      boost::thread skrun_thread_;
-
-      boost::shared_ptr<softkinetic_wrapper::ImageRGB24> rgbImage_;
-      boost::shared_ptr<softkinetic_wrapper::DepthImage> depthImage_;
-
-      pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_;
-
-      Eigen::Matrix3f intrinsics_;
-      Eigen::Matrix4f extrinsics_;
-
-      //static SKGrabber* instance;
-
     public:
       EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   };
